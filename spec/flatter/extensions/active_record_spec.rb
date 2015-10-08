@@ -7,9 +7,21 @@ module Flatter::Extensions
   end
 
   module ActiveRecordSpec
-    User = SpecModel(:users, email: :string) do
+    User = SpecModel(:users, email: :string!) do
       has_one :person, class_name: 'Flatter::Extensions::ActiveRecordSpec::Person'
       has_many :phones, class_name: 'Flatter::Extensions::ActiveRecordSpec::Phone'
+      has_many :user_roles, class_name: 'Flatter::Extensions::ActiveRecordSpec::UserRole', dependent: :delete_all
+      has_many :roles, through: :user_roles, class_name: 'Flatter::Extensions::ActiveRecordSpec::Role'
+    end
+
+    UserRole = SpecModel(:user_roles, user_id: :integer, role_id: :integer) do
+      belongs_to :user, class_name: 'Flatter::Extensions::ActiveRecordSpec::User'
+      belongs_to :role, class_name: 'Flatter::Extensions::ActiveRecordSpec::Role'
+    end
+
+    Role = SpecModel(:roles, user_id: :integer, name: :string) do
+      has_many :user_roles, class_name: 'Flatter::Extensions::ActiveRecordSpec::UserRole', dependent: :delete_all
+      has_many :users, through: :user_roles, class_name: 'Flatter::Extensions::ActiveRecordSpec::User'
     end
 
     Person = SpecModel(:people, user_id: :integer, first_name: :string, last_name: :string) do
@@ -23,13 +35,19 @@ module Flatter::Extensions
     end
 
     class UserMapper < ::Flatter::Mapper
-      map user_email: :email
+      map user_email: :email,
+        writer: -> (value){ target.email = value.blank? ? nil : value }
 
       validates_presence_of :user_email
 
       trait :registration do
         mount :person, foreign_key: :user_id, mapper_class_name: 'Flatter::Extensions::ActiveRecordSpec::PersonMapper'
         mount :phone, foreign_key: :user_id, mapper_class_name: 'Flatter::Extensions::ActiveRecordSpec::PhoneMapper'
+      end
+
+      trait :with_roles do
+        map :role_ids,
+          writer: -> (value){ target.role_ids = value.split(',') }
       end
     end
 
@@ -45,6 +63,34 @@ module Flatter::Extensions
   end
 
   RSpec.describe ActiveRecord do
+    describe 'general behavior' do
+      let!(:user_role)    { ActiveRecordSpec::Role.create(id: 1, name: 'User') }
+      let!(:manager_role) { ActiveRecordSpec::Role.create(id: 2, name: 'Manager') }
+      let!(:admin_role)   { ActiveRecordSpec::Role.create(id: 3, name: 'Admin') }
+      let(:user)   { ActiveRecordSpec::User.create(email: 'spec@mail.com', role_ids: [1]) }
+      let(:mapper) { ActiveRecordSpec::UserMapper.new(user, :with_roles) }
+
+      after do
+        ActiveRecordSpec::Role.destroy_all
+        ActiveRecordSpec::User.destroy_all
+      end
+
+      it 'uses transaction on #apply method call' do
+        expect(::ActiveRecord::Base).to receive(:transaction).at_least(:once).and_call_original
+
+        expect(mapper.apply(user_email: '', role_ids: '2,3')).to be false
+        expect(user.reload.role_ids).to eq [1]
+      end
+
+      it 'uses transaction on #save method call' do
+        expect(::ActiveRecord::Base).to receive(:transaction).at_least(:once).and_call_original
+
+        mapper.write(user_email: '')
+        expect(mapper.save).to be false
+        expect(user.reload.email).to eq 'spec@mail.com'
+      end
+    end
+
     describe 'user registration scenario' do
       let(:new_user) { ActiveRecordSpec::User.new }
       let(:mapper)   { ActiveRecordSpec::UserMapper.new(new_user, :registration) }
@@ -62,7 +108,7 @@ module Flatter::Extensions
           expect_any_instance_of(ActiveRecordSpec::Phone).not_to receive(:save)
 
           expect { expect { expect {
-            expect(mapper.apply(registration_params))
+            expect(mapper.apply(registration_params)).to be true
           }.to change{ ActiveRecordSpec::User.count }.by(1)
           }.to change{ ActiveRecordSpec::Person.count }.by(1)
           }.to change{ ActiveRecordSpec::Phone.count }.by(1)

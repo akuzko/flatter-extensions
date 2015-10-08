@@ -59,8 +59,8 @@ if defined? ActiveRecord
 
           def reflection_from_target(target)
             target_class = target.class
-            reflection   = target_class.reflect_on_association(name)
-            reflection || target_class.reflect_on_association(name.pluralize)
+            reflection   = target_class.reflect_on_association(name.to_sym)
+            reflection || target_class.reflect_on_association(name.pluralize.to_sym)
           end
           private :reflection_from_target
         end
@@ -69,7 +69,19 @@ if defined? ActiveRecord
           def apply(*)
             return super unless ar?
 
-            ::ActiveRecord::Base.transaction{ super }
+            !!::ActiveRecord::Base.transaction do
+              super or raise ::ActiveRecord::Rollback
+            end
+          end
+
+          def save
+            !!::ActiveRecord::Base.transaction do
+              begin
+                super
+              rescue ::ActiveRecord::StatementInvalid
+                raise ::ActiveRecord::Rollback
+              end
+            end
           end
 
           def save_target

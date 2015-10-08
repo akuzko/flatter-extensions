@@ -45,7 +45,7 @@ Allows you to define multiparam mappings by using `:multiparam` option to mappin
 Works pretty much like `Rails` multiparam attribute assignment:
 
 ```ruby
-class PersonMapper
+class PersonMapper < Flatter::Mapper
   map :first_name, :last_name
   map dob: :date_of_birth, multiparam: Date
 end
@@ -54,7 +54,7 @@ end
 
 mapper = PersonMapper.new(person)
 mapper.write(first_name: 'John', 'dob(1i)' => '2015', 'dob(2i)' => '01', 'dob(3i)' => '15')
-person.date_of_birt # => Thu, 15 Jan 2015
+person.date_of_birth # => Thu, 15 Jan 2015
 ```
 
 ### Skipping
@@ -183,7 +183,7 @@ end
 class PersonMapper < Flatter::Mapper
   mount :user
   mount :location
-  mount :phones
+  mount :phone
 end
 ```
 
@@ -236,10 +236,12 @@ end
 #### Transactions
 
 With `:active_record` extension you should mainly use `apply(params)` method for
-updating or creating your models via mappers. It wraps whole saving process (both
-writing values and saving) in a transaction. The reason for this is that your
+updating or creating your models via mappers. It wraps whole saving process (writing
+values, validation and saving) in a transaction. The reason for this is that your
 mappings may have custom db-mutating writers, and if saving fails, such mutations
-should be rolled back.
+should be rolled back. However, `save` method is also wrapped in transaction and
+will return `false` if any mapper in processing chain will fail to save it's
+target. This might happen due to DB constraints, for example.
 
 ## Development
 
