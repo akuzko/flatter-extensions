@@ -21,11 +21,13 @@ module Flatter
         end
 
         def extract_multiparams!(params)
-          mappings.each do |name, mapping|
+          return super if collection?
+
+          local_mappings.each do |mapping|
             next unless mapping.multiparam?
 
             param_keys = params.keys.
-              select{ |key| key.to_s =~ /#{name}\(\d+[if]\)/ }.
+              select{ |key| key.to_s =~ /#{mapping.name}\(\d+[if]\)/ }.
               sort_by{ |key| key.to_s[/\((\d+).*\)/, 1].to_i }
 
             next if param_keys.empty?
@@ -41,7 +43,7 @@ module Flatter
               values.push value
             end
 
-            params[name] = args
+            params[mapping.name] = args
           end
         end
         private :extract_multiparams!

@@ -20,6 +20,7 @@ module Flatter
         end
 
         def skip!
+          collection.each(&:skip!) if collection?
           @skipped = true
         end
 

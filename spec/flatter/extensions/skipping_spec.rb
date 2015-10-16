@@ -12,6 +12,10 @@ module Flatter::Extensions
       def b
         @b ||= B.new
       end
+
+      def cs
+        @cs ||= Array.new(3){ C.new(c: 'c') }
+      end
     end
 
     class B
@@ -22,20 +26,40 @@ module Flatter::Extensions
       end
     end
 
-    class MapperA < ::Flatter::Mapper
-      map :a1
-      mount :b, mapper_class_name: 'Flatter::Extensions::SkippingSpec::MapperB'
+    class C
+      include ActiveModel::Model
 
-      set_callback :save, :before, -> { mounting(:b).skip! if a1 == 'skip!' }
+      attr_accessor :c
+
+      def save
+        c << '-saved'
+      end
     end
 
-    class MapperB < ::Flatter::Mapper
+    class AMapper < ::Flatter::Mapper
+      map :a1
+      mount :b
+
+      set_callback :save, :before, -> { mounting(:b).skip! if a1 == 'skip!' }
+
+      trait :with_collection do
+        mount :cs
+
+        set_callback :save, :before, -> { mounting(:cs).skip! }
+      end
+    end
+
+    class BMapper < ::Flatter::Mapper
+    end
+
+    class CMapper < ::Flatter::Mapper
+      map attr_c: :c
     end
   end
 
   RSpec.describe Skipping do
     let(:model)  { SkippingSpec::A.new }
-    let(:mapper) { SkippingSpec::MapperA.new(model) }
+    let(:mapper) { SkippingSpec::AMapper.new(model) }
 
     specify 'when conditions are met' do
       mapper.write(a1: 'skip!')
@@ -48,6 +72,15 @@ module Flatter::Extensions
       mapper.write(a1: 'a1')
       expect_any_instance_of(SkippingSpec::B).to receive(:save)
       mapper.save
+    end
+
+    describe "collections support" do
+      let(:mapper) { SkippingSpec::AMapper.new(model, :with_collection) }
+
+      it "does not save items" do
+        mapper.save
+        expect(mapper.attr_cs).to eq %w(c c c)
+      end
     end
   end
 end

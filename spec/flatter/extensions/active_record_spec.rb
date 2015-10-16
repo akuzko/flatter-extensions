@@ -3,6 +3,7 @@ require 'spec_helper'
 module Flatter::Extensions
   ::Flatter.configure do |f|
     f.use :order
+    f.use :skipping
     f.use :active_record
   end
 
@@ -31,7 +32,7 @@ module Flatter::Extensions
     Phone = SpecModel(:phones, user_id: :integer, number: :string) do
       belongs_to :user, class_name: 'Flatter::Extensions::ActiveRecordSpec::User'
 
-      validates_inclusion_of :number, in: ['111-222-3333']
+      validates_inclusion_of :number, in: ['111-222-3333', '333-222-1111']
     end
 
     class UserMapper < ::Flatter::Mapper
@@ -41,8 +42,15 @@ module Flatter::Extensions
       validates_presence_of :user_email
 
       trait :registration do
-        mount :person, foreign_key: :user_id, mapper_class_name: 'Flatter::Extensions::ActiveRecordSpec::PersonMapper'
-        mount :phone, foreign_key: :user_id, mapper_class_name: 'Flatter::Extensions::ActiveRecordSpec::PhoneMapper'
+        mount :person, foreign_key: :user_id
+        mount :phone, foreign_key: :user_id
+      end
+
+      trait :management do
+        mount :person, foreign_key: :user_id
+        mount :phones, foreign_key: :user_id do
+          key :id
+        end
       end
 
       trait :with_roles do
@@ -91,7 +99,7 @@ module Flatter::Extensions
       end
     end
 
-    describe 'user registration scenario' do
+    describe 'user registration and management scenario' do
       let(:new_user) { ActiveRecordSpec::User.new }
       let(:mapper)   { ActiveRecordSpec::UserMapper.new(new_user, :registration) }
       let(:registration_params) do
@@ -126,14 +134,62 @@ module Flatter::Extensions
           end
         end
       end
+
+      describe 'management trait' do
+        let(:user)    { ActiveRecordSpec::User.create(email: 'user@email.com') }
+        let!(:person) { ActiveRecordSpec::Person.create(user: user, first_name: 'John', last_name: 'Smith') }
+        let!(:phones) do
+          ['111-222-3333', '333-222-1111'].map do |number|
+            ActiveRecordSpec::Phone.create!(user: user, number: number)
+          end
+          user.phones
+        end
+        let!(:phone_ids) { phones.map(&:id) }
+
+        let(:mapper) { ActiveRecordSpec::UserMapper.new(user, :management) }
+
+        it 'reads collection properly' do
+          expect(mapper.phones).to be_an_instance_of(Array)
+          expect(mapper.phones.map{ |ph| ph['key'] }).to eq phones.map(&:id)
+        end
+
+        context 'writing data' do
+          let(:params) do
+            { last_name: 'Smith Jr',
+              phones: [{
+                key: phone_ids[1], phone_number: '111-222-3333'
+              }, {
+                phone_number: '123-456-7890'
+              }, {
+                phone_number: '987-654-3210'
+              }] }
+          end
+
+          subject(:apply) { mapper.apply(params) }
+
+          it 'updates person' do
+            expect{ apply }.
+              to change{ person.reload.last_name }.from('Smith').to('Smith Jr')
+          end
+
+          it 'updates phones' do
+            expect{ apply }.to change{ phones.count }.from(2).to(3)
+
+            expect(ActiveRecordSpec::Phone.find_by(id: phone_ids[0])).to be nil
+            expect(ActiveRecordSpec::Phone.find(phone_ids[1]).number).to eq '111-222-3333'
+            expect(user.reload.phones.pluck(:number)).
+              to match_array ['111-222-3333', '123-456-7890', '987-654-3210']
+          end
+        end
+      end
     end
 
     describe 'people management scenario' do
       let(:person) { ActiveRecordSpec::Person.new }
       let(:mapper) do
         ActiveRecordSpec::PersonMapper.new(person) do
-          mount :user, mounter_foreign_key: :user_id, index: {save: -1}, mapper_class_name: 'Flatter::Extensions::ActiveRecordSpec::UserMapper' do
-            mount :phone, foreign_key: :user_id, mapper_class_name: 'Flatter::Extensions::ActiveRecordSpec::PhoneMapper'
+          mount :user, mounter_foreign_key: :user_id, index: {save: -1} do
+            mount :phone, foreign_key: :user_id
           end
 
           set_callback :validate, :before, :skip_empty

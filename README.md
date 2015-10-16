@@ -153,19 +153,6 @@ single mapper object with plain hash of attributes that can be used to render a 
 used as a form object itself to distribute form params among records, or used in
 your API, encapsulating processing logic with reusable traits.
 
-`:active_record` extension depends on `:skipping` extension to be able to utilize
-it properly. This means that if you use `:active_record` extension, `:skipping`
-will be used automatically. Although there will be no harm using it explicitly
-like:
-
-```ruby
-Flatten.configure do |f|
-  f.use :order
-  f.use :skipping
-  f.use :active_record
-end
-```
-
 When using `:active_record` extension, you should keep in mind following things:
 
 #### Mounted target from association
