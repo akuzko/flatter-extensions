@@ -24,7 +24,7 @@ Gem::Specification.new do |spec|
   spec.executables   = spec.files.grep(%r{^bin/}) { |f| File.basename(f) }
   spec.require_paths = ["lib"]
 
-  spec.add_dependency "flatter"
+  spec.add_dependency "flatter", "~> 0.2"
 
   spec.add_development_dependency "activerecord", ">= 4.0"
   spec.add_development_dependency "sqlite3"

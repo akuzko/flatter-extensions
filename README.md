@@ -164,25 +164,37 @@ will be tried to be derived from relevant association. For example:
 class Person < ActiveRecord::Base
   belongs_to :user
   has_one :location
+  has_many :notes
   has_many :phones
 end
 
 class PersonMapper < Flatter::Mapper
   mount :user
   mount :location
-  mount :phone
+  mount :note
+  mount :phones
 end
 ```
 
 Here we have:
 - `:user` is a `:belongs_to` association. Target for mounted `UserMapper` will
   be by default fetched as `person.user || person.build_user`.
+
 - `:location` is a `:has_one` association. Just like `:user`, target for mounted
   `LocationMapper` will be fetched as `person.location || person.build_location`.
-- `:phones` is a `:has_many` association, and we map **singular** phone. In this
-  case target for `PhoneMapper` is fetched as `person.phones.build`. Thus, you may
+
+- `:notes` is a `:has_many` association, and we map **singular** note. In this
+  case target for `PhoneMapper` is fetched as `person.notes.build`. Thus, you may
   want to `skip!` this mounting before save or validation to prevent creating
   freshly-built record, if it was not populated with any values.
+
+- `:phones` is a `:has_many` association, mounted as a collection mountings `:phones`.
+  In this case whole association would handled by mapper as a collection (this
+  feature is available starting from `0.2.0` version of `flatter`). Thus, reading
+  instance of `PersonMapper` will give you array of `phones`, each of which will
+  have it's own `key` value dependent on it's definition. See
+  [flatter Collections](https://github.com/akuzko/flatter#collections) for more
+  details on how mapped collections are handled.
 
 Mounting collection associations and working with them as with collections is
 not supported for now.
