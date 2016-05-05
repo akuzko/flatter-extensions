@@ -92,6 +92,20 @@ class PersonMapper < Flatter::Mapper
 end
 ```
 
+Starting from version `0.2.1`, there are `:skip_if` and `:reject_if` options
+for mounted mappers. First one is used for skipping mounting if passed condition
+is evaluated to non-falsy value. Second one is used to reject specific sets of
+params before they are passed for collection processing.
+
+```ruby
+class EmployeeMapper < Flatter::Mapper
+  map :first_name, :last_name
+
+  mount :department, skip_if: -> { department_name.blank? }
+  mount :projects, reject_if: ->(params){ params[:project_name].blank? }
+end
+```
+
 ### Order
 
 ```ruby
@@ -202,11 +216,13 @@ not supported for now.
 Keep in mind that you can always pass `:target` option to control targets of
 mounted mappers.
 
-#### Saving is performed without callbacks and validation
+#### Saving is performed without validation and callbacks by default
 
-That's right. On save your models will not be validated and their `:save` callbacks
-will not be executed. All such form-related business logic should be handled by mappers,
-keeping models clean for taking care about inner application business logic only.
+On save your models will not be validated (and their validation callbacks will
+not be called), and their `:save` callbacks will not be executed. However,
+starting from version `0.2.1`, you can use `Flatter::Mapper` class-level methods
+`enable_callback` (and it's alias `enable_callbacks`) to enable specific
+callbacks, such as `enable_callbacks :create, :update`.
 
 For example, if you have multi-step form and want to put all your validations in
 model, there will be dozens of boolean checks to use specific validations only

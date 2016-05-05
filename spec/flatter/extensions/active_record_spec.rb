@@ -33,6 +33,13 @@ module Flatter::Extensions
       belongs_to :user, class_name: 'Flatter::Extensions::ActiveRecordSpec::User'
 
       validates_inclusion_of :number, in: ['111-222-3333', '333-222-1111']
+
+      before_create :set_ext
+      attr_reader :ext
+
+      def set_ext
+        @ext = 111
+      end
     end
 
     class UserMapper < ::Flatter::Mapper
@@ -99,6 +106,38 @@ module Flatter::Extensions
       end
     end
 
+    describe 'enabling callbacks' do
+      context 'simple case' do
+        before { ActiveRecordSpec::PhoneMapper.enable_ar_callback :create }
+        after  { ActiveRecordSpec::PhoneMapper.disable_ar_callback :create }
+
+        let(:phone)  { ActiveRecordSpec::Phone.new }
+        let(:mapper) { ActiveRecordSpec::PhoneMapper.new(phone) }
+
+        it 'uses enabled callbacks' do
+          mapper.apply(phone_number: '123-456-7890')
+          expect(phone).to be_persisted
+          expect(phone.ext).to eq 111
+          expect(phone).not_to be_valid # validation is skipped during save as expected
+        end
+      end
+
+      context 'with nested models' do
+        before { ActiveRecordSpec::UserMapper.enable_ar_callback :save }
+        after  { ActiveRecordSpec::UserMapper.disable_ar_callback :save }
+
+        let(:user)   { ActiveRecordSpec::User.new }
+        let(:mapper) { ActiveRecordSpec::UserMapper.new(user){ mount :phone } }
+        let(:params) { {user_email: 'spec@mail.com', phone_number: '123-321'} }
+
+        it 'saves associated record via Rails routines' do
+          expect(mapper.apply(params)).to be true
+          expect(user).to be_persisted
+          expect(user.phones.first.number).to eq '123-321'
+        end
+      end
+    end
+
     describe 'user registration and management scenario' do
       let(:new_user) { ActiveRecordSpec::User.new }
       let(:mapper)   { ActiveRecordSpec::UserMapper.new(new_user, :registration) }
@@ -123,7 +162,7 @@ module Flatter::Extensions
         end
 
         describe 'nested models' do
-          let(:user) { ActiveRecordSpec::User.first }
+          let(:user) { ActiveRecordSpec::User.last }
           before     { mapper.apply(registration_params) }
 
           specify 'created with proper attributes' do
@@ -250,7 +289,7 @@ module Flatter::Extensions
           }.to change(ActiveRecordSpec::Person, :count).by(1)
           }.not_to change(ActiveRecordSpec::Phone, :count)
 
-          user = ActiveRecordSpec::User.first
+          user = ActiveRecordSpec::User.last
           expect(user.email).to eq 'user@email.com'
           expect(user.person.first_name).to eq 'John'
           expect(user.person.last_name).to eq 'Smith'
@@ -272,7 +311,7 @@ module Flatter::Extensions
           }.to change(ActiveRecordSpec::Person, :count).by(1)
           }.to change(ActiveRecordSpec::Phone, :count).by(1)
 
-          user = ActiveRecordSpec::User.first
+          user = ActiveRecordSpec::User.last
           expect(user.email).to eq 'user@email.com'
           expect(user.person.first_name).to eq 'John'
           expect(user.person.last_name).to eq 'Smith'

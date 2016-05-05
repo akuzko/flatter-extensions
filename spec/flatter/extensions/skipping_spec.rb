@@ -16,6 +16,14 @@ module Flatter::Extensions
       def cs
         @cs ||= Array.new(3){ C.new(c: 'c') }
       end
+
+      def d
+        @d ||= D.new
+      end
+
+      def es
+        @es ||= Array.new(3){ |i| E.new(i: i, e: 'e') }
+      end
     end
 
     class B
@@ -36,9 +44,36 @@ module Flatter::Extensions
       end
     end
 
+    class D
+      include ActiveModel::Model
+
+      attr_accessor :d
+      attr_reader :saved
+
+      def save
+        @saved = true
+      end
+
+      def saved?
+        !!@saved
+      end
+    end
+
+    class E
+      include ActiveModel::Model
+
+      attr_accessor :i, :e
+
+      def save
+        e << '-saved'
+      end
+    end
+
     class AMapper < ::Flatter::Mapper
       map :a1
       mount :b
+      mount :d, skip_if: -> { attr_d.blank? }
+      mount :es, reject_if: -> (params) { params[:attr_e].blank? }
 
       set_callback :save, :before, -> { mounting(:b).skip! if a1 == 'skip!' }
 
@@ -54,6 +89,15 @@ module Flatter::Extensions
 
     class CMapper < ::Flatter::Mapper
       map attr_c: :c
+    end
+
+    class DMapper < ::Flatter::Mapper
+      map :saved, attr_d: :d
+    end
+
+    class EMapper < ::Flatter::Mapper
+      key :i
+      map attr_e: :e
     end
   end
 
@@ -74,12 +118,37 @@ module Flatter::Extensions
       mapper.save
     end
 
-    describe "collections support" do
+    describe 'collections support' do
       let(:mapper) { SkippingSpec::AMapper.new(model, :with_collection) }
 
-      it "does not save items" do
+      it 'does not save items' do
         mapper.save
         expect(mapper.attr_cs).to eq %w(c c c)
+      end
+    end
+
+    describe 'skip_if option' do
+      context 'when conditions are met' do
+        it 'skips mapper' do
+          mapper.apply(attr_d: '')
+          expect(mapper.mounting(:d).target).not_to be_saved
+          expect(mapper.mounting(:d)).to be_skipped
+        end
+      end
+
+      context 'when conditions are not met' do
+        it "doesn't skip mapper" do
+          mapper.apply(attr_d: 'd')
+          expect(mapper.mounting(:d).target).to be_saved
+          expect(mapper.mounting(:d).target.d).to eq 'd'
+        end
+      end
+
+      context 'applied to collection mounting' do
+        it 'skips items that have conditions met' do
+          mapper.apply(es: [{attr_e: 'e1'}, {attr_e: ''}, {attr_e: 'e3'}, {attr_e: ''}])
+          expect(mapper.target.es.map(&:e)).to eq ['e1-saved', 'e3-saved']
+        end
       end
     end
   end
