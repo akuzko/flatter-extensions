@@ -1,6 +1,19 @@
 # Flatter::Extensions
 
-[![Build Status](https://secure.travis-ci.org/akuzko/flatter-extensions.png)](http://travis-ci.org/akuzko/flatter-extensions)
+## This gem has been merged into [flatter](https://github.com/akuzko/flatter)
+
+Initially, I wanted to keep core functionality aside from extensions, but that
+appeared to be bad idea considering that I also wanted to keep versions of
+both gems to be in sync, since update of minor version of extensions gem usually
+required to update patch version of core gem. Eventually, development and
+maintenance is much simpler when everything is located in one place.
+
+Beside of that `ActiveRecord`'s extension behavior was updated: mapper's
+target has all validations and callbacks executed. The only thing that was
+left aside is association autosave, since associated records are intended to
+be saved via flatter means (i.e. with mounted mappers).
+
+--
 
 A set of extensions to be used with [Flatter](https://github.com/akuzko/flatter) gem.
 
@@ -272,4 +285,3 @@ Bug reports and pull requests are welcome on GitHub at https://github.com/akuzko
 ## License
 
 The gem is available as open source under the terms of the [MIT License](http://opensource.org/licenses/MIT).
-
